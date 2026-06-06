@@ -422,7 +422,10 @@ func import(source_file, save_path, options, r_platform_variants, r_gen_files):
 			
 		for j in range(joint.keyFramesTrans.size()):
 			var keyPos = joint.keyFramesTrans[j].position
-			var keyRot = joint.keyFramesRot[j].rotation
+			var rotIndex = j
+			if j >= joint.keyFramesRot.size():
+				rotIndex = joint.keyFramesRot.size() - 1
+			var keyRot = joint.keyFramesRot[rotIndex].rotation
 			
 			var position = Vector3(keyPos[0], keyPos[1], keyPos[2])
 			var boneTransform = Transform()
