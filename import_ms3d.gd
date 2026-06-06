@@ -371,8 +371,6 @@ func import(source_file, save_path, options, r_platform_variants, r_gen_files):
 		var n2 = tri.vertexNormals[1]
 		var n3 = tri.vertexNormals[2]
 		
-		print(Vector2(tri.s[0], tri.t[0]))
-		
 		n.append(Vector3(n1[0], n1[1], n1[2]))
 		v.append(Vector3(v1[0], v1[1], v1[2]))
 		st.append(Vector2(tri.s[0], tri.t[0]))
@@ -443,6 +441,15 @@ func import(source_file, save_path, options, r_platform_variants, r_gen_files):
 	animationPlayer.set_owner(rootNode)
 	
 	rootNode.scale = Vector3.ONE * options.get("scale_modifier")
+	
+	#Loading material
+	var materialPath = source_file
+	materialPath.erase(materialPath.length() - 5, 5)
+	var materialFile = File.new()
+	if file.open(materialPath + ".png", File.READ) == OK:
+		var newMat = SpatialMaterial.new()
+		newMat.albedo_texture = load(materialPath + ".png")
+		meshInstance.set_surface_material(0, newMat)
 
 	var packedScene = PackedScene.new()
 	var result = packedScene.pack(rootNode)
