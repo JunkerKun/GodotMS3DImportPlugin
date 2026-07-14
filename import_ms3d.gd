@@ -65,6 +65,15 @@ class MS3DVertExt:
 	var boneIds: Array
 	var weights: Array
 	var extra: Array
+	
+class AnimFrame:
+	var frame: int
+	var duration: float
+	
+class AnimData:
+	var name: String
+	var frames: Array
+	var isLooped: bool
 
 func get_importer_name():
 	return "jessicochan.ms3d"
@@ -106,6 +115,35 @@ func addBone(skeleton, name, parentName):
 	skeleton.set_bone_rest(boneId, boneTransform)
 
 func import(source_file, save_path, options, r_platform_variants, r_gen_files):
+	#Reading animations file
+	var animData: Dictionary
+	var animFile = File.new()
+	var animPath = source_file
+	animPath.erase(animPath.length() - 5, 5)
+	animPath += ".anims"
+	if animFile.open(animPath, File.READ) != OK:
+		print("Warn: No animation file found. Creating animation for entire timeline")
+	else:
+		var currentAnimation: AnimData = null
+		while !animFile.eof_reached():
+			var line = animFile.get_line()
+			if line.empty():
+				continue
+			
+			var params = line.split(" ")
+			if params[0] == "animation":
+				currentAnimation = AnimData.new()
+				currentAnimation.name = params[1]
+				currentAnimation.isLooped = params.size() > 2 && params[2] == "loop"
+				animData[params[1]] = currentAnimation
+				continue
+			
+			if params[0] == "frame":
+				var frame = AnimFrame.new()
+				frame.frame = int(params[1])
+				frame.duration = float(params[2])
+				currentAnimation.frames.push_back(frame)
+		
 	#Reading file
 	var file = File.new()
 	if file.open(source_file, File.READ) != OK:
@@ -407,38 +445,88 @@ func import(source_file, save_path, options, r_platform_variants, r_gen_files):
 	skeleton.add_child(meshInstance)
 	meshInstance.set_owner(rootNode)
 	
-	var animation = Animation.new()
-	animation.length = joints[0].keyFramesRot.size()
+	#Adding animations
+	var animationOffsets: Dictionary
+	var animationPlayer = AnimationPlayer.new()
+	if animData.size() == 0:
+		var newAnimData = AnimData.new()
+		newAnimData.name = "Animation"
+		animData["Animation"] = newAnimData
+		
+		var newAnimation = Animation.new()
+		newAnimation.length = joints[0].keyFramesRot.size()
+		animationPlayer.add_animation("Animation", newAnimation)
+		var newDictionary: Dictionary
+		animationOffsets["Animation"] = newDictionary
+		var anm = animData["Animation"]
+		for j in range(nNumJoints):
+			var joint = joints[j]
+			var boneName = skeleton.get_bone_name(j)
+			newDictionary[boneName] = 0
+			if anm.frames.empty():
+				for t in range(joint.numKeyFramesTrans):
+					var newFrame = AnimFrame.new()
+					newFrame.frame = t
+					newFrame.duration = 0.1
+					anm.frames.push_back(newFrame)
+			
+	else:
+		for i in animData.values():
+			var newAnimation = Animation.new()
+			var totalLength = 0
+			for t in range(i.frames.size() - 1):
+				totalLength += i.frames[t].duration
+			newAnimation.length = totalLength
+			animationPlayer.add_animation(i.name, newAnimation)
+			animationPlayer.get_animation(i.name).loop = i.isLooped
+			var newDictionary: Dictionary
+			animationOffsets[i.name] = newDictionary
+			
+			for j in range(nNumJoints):
+				var joint = joints[j]
+				var boneName = skeleton.get_bone_name(j)
+				newDictionary[boneName] = 0
 	
 	for i in range(nNumJoints):
 		var joint = joints[i]
 		var boneName = skeleton.get_bone_name(i)
 		var path = str(rootNode.get_path_to(skeleton)) + ":" + boneName
 		var nodePath = NodePath(path)
-		var trackId = animation.find_track(nodePath)
-		if trackId == -1:
-			trackId = animation.add_track(Animation.TYPE_TRANSFORM)
-			animation.track_set_path(trackId, nodePath)
-			
-		for j in range(joint.keyFramesTrans.size()):
-			var keyPos = joint.keyFramesTrans[j].position
-			var rotIndex = j
-			if j >= joint.keyFramesRot.size():
-				rotIndex = joint.keyFramesRot.size() - 1
-			var keyRot = joint.keyFramesRot[rotIndex].rotation
-			
-			var position = Vector3(keyPos[0], keyPos[1], keyPos[2])
-			var boneTransform = Transform()
-			boneTransform = boneTransform.rotated(Vector3(1, 0, 0), keyRot[0])
-			boneTransform = boneTransform.rotated(Vector3(0, 1, 0), keyRot[1])
-			boneTransform = boneTransform.rotated(Vector3(0, 0, 1), keyRot[2])
-			var rotation = boneTransform.basis.get_rotation_quat()
-			var scale = Vector3(1, 1, 1)
-			
-			animation.transform_track_insert_key(trackId, joint.keyFramesTrans[j].time, position, rotation, scale)
-
-	var animationPlayer = AnimationPlayer.new()
-	animationPlayer.add_animation("Animation", animation)
+		for a in animData.values():
+			var animation = animationPlayer.get_animation(a.name)
+			if animation == null:
+				animation = animationPlayer.get_animation("Animation")
+				if animation == null:
+					continue
+						
+			for fr in a.frames:
+				for j in range(joint.keyFramesTrans.size()):
+					if fr.frame == j:
+						var trackId = animation.find_track(nodePath)
+						if trackId == -1:
+							trackId = animation.add_track(Animation.TYPE_TRANSFORM)
+							animation.track_set_path(trackId, nodePath)
+						
+						var keyPos = joint.keyFramesTrans[j].position
+						var rotIndex = j
+						if j >= joint.keyFramesRot.size():
+							rotIndex = joint.keyFramesRot.size() - 1
+						var keyRot = joint.keyFramesRot[rotIndex].rotation
+						
+						var position = Vector3(keyPos[0], keyPos[1], keyPos[2])
+						var boneTransform = Transform()
+						boneTransform = boneTransform.rotated(Vector3(1, 0, 0), keyRot[0])
+						boneTransform = boneTransform.rotated(Vector3(0, 1, 0), keyRot[1])
+						boneTransform = boneTransform.rotated(Vector3(0, 0, 1), keyRot[2])
+						var rotation = boneTransform.basis.get_rotation_quat()
+						var scale = Vector3(1, 1, 1)
+						
+						if a.name == "Animation":
+							
+							animation.transform_track_insert_key(trackId, joint.keyFramesTrans[j].time, position, rotation, scale)
+						else:	
+							animation.transform_track_insert_key(trackId, animationOffsets[a.name][boneName], position, rotation, scale)
+							animationOffsets[a.name][boneName] += fr.duration
 	
 	rootNode.add_child(animationPlayer)
 	animationPlayer.set_owner(rootNode)
