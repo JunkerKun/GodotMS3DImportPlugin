@@ -92,7 +92,8 @@ func get_resource_type():
 
 func get_import_options(preset):
 	return [
-		{"name": "scale_modifier", "default_value": 1.0}
+		{"name": "scale_modifier", "default_value": 1.0},
+		{"name": "wrap_loop", "default_value": false}
 	]
 
 func get_preset_count():
@@ -474,7 +475,10 @@ func import(source_file, save_path, options, r_platform_variants, r_gen_files):
 		for i in anim_data.values():
 			var new_animation = Animation.new()
 			var totalLength = 0
-			for t in range(i.frames.size() - 1):
+			var end = i.frames.size() - 1
+			if options["wrap_loop"]:
+				end = i.frames.size()
+			for t in range(end):
 				totalLength += i.frames[t].duration
 			new_animation.length = totalLength
 			animation_player.add_animation(i.name, new_animation)
@@ -522,7 +526,6 @@ func import(source_file, save_path, options, r_platform_variants, r_gen_files):
 						var scale = Vector3(1, 1, 1)
 						
 						if a.name == "Animation":
-							
 							animation.transform_track_insert_key(trackId, joint.key_frames_trans[j].time, position, rotation, scale)
 						else:	
 							animation.transform_track_insert_key(trackId, animation_offsets[a.name][bone_name], position, rotation, scale)
