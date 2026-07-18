@@ -144,6 +144,16 @@ func import(source_file, save_path, options, r_platform_variants, r_gen_files):
 				frame.frame = int(params[1])
 				frame.duration = float(params[2])
 				current_animation.frames.push_back(frame)
+				
+			if params[0] == "frameset":
+				var begin = int(params[1])
+				var end = int(params[2]) + 1
+				
+				for i in range(begin, end):
+					var frame = AnimFrame.new()
+					frame.frame = i
+					frame.duration = float(params[3])
+					current_animation.frames.push_back(frame)
 		
 	#Reading file
 	var file = File.new()
